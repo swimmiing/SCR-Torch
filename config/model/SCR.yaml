@@ -1,0 +1,18 @@
+model:
+  module_name: SCR
+  args:
+    class: SCRFull
+    N: 192
+    M: 320
+    filters: [3, 3, 3]
+    scales_min: 0.11
+    scales_max: 256
+    scales_levels: 64
+
+loss:
+  - Distortion
+  - Rate
+
+loss_w:
+  - 1
+  - 1

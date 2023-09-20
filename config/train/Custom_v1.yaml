@@ -1,0 +1,19 @@
+optimizer:
+  name: Adam
+  aux_lr_scale: 10
+  arg:
+    lr: 0.00005
+    weight_decay: 0.0
+
+scheduler:
+  name: MultiStepLR  # set null if you do not want to use scheduler
+  arg:
+    gamma: 0.2
+    milestones: [0.15 0.075]  # if int: epochs, if float: remaining epochs as a ratio of total epochs
+
+train_data: Temp
+epoch: 20
+batch_size: 2
+input_resolution: 256
+num_workers: 4
+seed: 0

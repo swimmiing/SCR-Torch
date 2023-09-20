@@ -5,8 +5,6 @@ Python implementation of the NeurIPS'22 paper ["Selective compression learning o
 Official code repository [Link](https://github.com/JooyoungLeeETRI/SCR)
 ## Introduction
 
----
-
 This repo is pytorch implementation of SCR. Code is very simple and easy to understand fastly.
 Some of these codes are based on [CompressAI](https://github.com/InterDigitalInc/CompressAI)
 
@@ -14,16 +12,12 @@ Currently the test code has been verified to produce results consistent with the
 
 ## Required packages
 
----
-
 - Python = 3.11.5
 - Pytorch = 2.0.1
 - CompressAI = 1.2.4
   - g++ installation required 
   
 ### Installation
-
----
 
 ```bash
 $ conda install -c nvidia cudatoolkit=11.8
@@ -37,8 +31,6 @@ $ pip install tqdm
 
 
 ## Data preparation
-
----
 
 **Important Note:** The current code is specifically designed to work with the TempDataset. We recommend either overwriting the CSV file located at ./TempDataset/metadata or creating a new **Dataset directory for use with this code.
 
@@ -55,8 +47,6 @@ $ pip install tqdm
 
 ## Training
 
----
-
 - Ensure that you check the .sh files and set the `$ export CUDA_VISIBLE_DEVICES=”**”` according to your hardware setup.
 - Make sure that `—model_name` corresponds to the configuration file located at `./config/model/{model_name}.yaml`.
 - Model files (.pth) will be saved in the directory `{—save_path}/Train_record/{model_name}_{exp_name}/`.
@@ -68,9 +58,7 @@ $ sh Experiment_Temp.sh. # For single GPU setup
 $ sh Distributed_Experiment.sh. # For multi-GPU setup (DDP)
 ```
 
-## Test
-
----
+## Testing
 
 - Before testing, please review the .sh file and set the `$ export CUDA_VISIBLE_DEVICES=”**”` environment variable according to your hardware configuration.
 - Ensure that the `—model_name` parameter corresponds to the configuration file located at `./config/model/{model_name}.yaml`.
@@ -85,8 +73,6 @@ $ sh Test_PTModels
 
 ## P**retrained models**
 
----
-
 **Important Note:** After downloading the Param.pth file, move it to the directory `{—save_path}/Train_record/{model_name}_{exp_name}/` before use. 
 Additionally, for testing, set the `--epochs` parameter to None or null in the `Test_PTModels.sh` script.
 
@@ -95,8 +81,6 @@ Additionally, for testing, set the `--epochs` parameter to None or null in the `
 - SCR_Full: [[Download Link]](https://drive.google.com/file/d/1Tsz1NKK8jvdOMioBY40mqiwS6mUsmY28/view?usp=sharing)
 
 ## **Citation**
-
----
 
 If you use this project, please cite the relevant original publications for the models and datasets, and cite this project as:
 

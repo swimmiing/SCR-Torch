@@ -54,7 +54,7 @@ $ pip install tqdm
 - Choose one of the following methods to initiate training:
 
 ```bash
-$ sh Experiment_Temp.sh. # For single GPU setup
+$ sh Experiment.sh. # For single GPU setup
 $ sh Distributed_Experiment.sh. # For multi-GPU setup (DDP)
 ```
 

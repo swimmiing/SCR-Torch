@@ -107,7 +107,7 @@ def main(model_name: str, exp_name: str, train_config_name: str, data_path: str,
                                                    pin_memory=False, drop_last=False)
 
     ''' Optimizer '''
-    optimizer = getattr(import_module(f"modules.{model_name}.optimizers"), 'CustomOptimizer')(model, train_conf_file)
+    optimizer = getattr(import_module(f"modules.{module_name}.optimizers"), 'CustomOptimizer')(model, train_conf_file)
 
     ''' Make distributed data parallel module '''
     model = DistributedDataParallel(model, device_ids=[device], output_device=device) if use_ddp else model

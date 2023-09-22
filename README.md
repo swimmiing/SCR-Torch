@@ -76,8 +76,8 @@ $ sh Test_PTModels
 **Important Note:** After downloading the Param.pth file, move it to the directory `{—save_path}/Train_record/{model_name}_{exp_name}/` before use. 
 Additionally, for testing, set the `--epochs` parameter to None or null in the `Test_PTModels.sh` script.
 
-- Hyperprior: [Download Link] will be update very soon
-- SCR_wo_SC: [Download Link] will be update very soon
+- Hyperprior (Quality level 8 only): [[Download Link]](https://drive.google.com/file/d/1WSrcbVhx-RDO9l_amcvaz5YTWbqKKifE/view?usp=sharing)
+- SCR_wo_SC: [[Download Link]](https://drive.google.com/file/d/1u49_e1SEBl4KQKOvBXU9p_AAP9nJYj_k/view?usp=sharing)
 - SCR_Full: [[Download Link]](https://drive.google.com/file/d/1Tsz1NKK8jvdOMioBY40mqiwS6mUsmY28/view?usp=sharing)
 
 ## **Citation**

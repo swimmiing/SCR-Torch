@@ -4,7 +4,7 @@ import modules.SCR.losses as losses
 import torch
 import yaml
 import numpy as np
-from typing import List, Optional, Union, Tuple, Dict, Any
+from typing import List, Optional, Union, Tuple, Dict, Any, Iterator
 from compressai.entropy_models import EntropyBottleneck, GaussianConditional
 from importlib import import_module
 import time
@@ -23,7 +23,7 @@ class SCRFull(_base_model._Model_Warpper):
         self.encoder = layers.Encoder(**args)
         self.decoder = layers.Decoder(input_channel=3, **args)
         self.hyper_encoder = layers.HyperEncoder(**args)
-        self.hyper_decoder = layers.HyperDecoder(**args)
+        self.hyper_decoder = layers.HyperDecoderSC(**args)
 
         # Initialize entropy bottleneck with specified parameters
         self.entropy_bottleneck = EntropyBottleneck(args['N'], filters=args['filters'], tail_mass=2 ** -8)
@@ -73,12 +73,12 @@ class SCRFull(_base_model._Model_Warpper):
 
         self.QV.requires_grad_(mode)
         self.IQV.requires_grad_(mode)
-        self.gamma.requires_grad_(mode)
+        self.gamma.requires_grad_(mode) if hasattr(self, 'gamma') else None  # for SCRWithoutSC
 
         # Status
         self.training = mode
 
-    def param(self) -> Dict[str, torch.nn.Parameter]:
+    def param(self) -> Dict[str, Iterator[torch.nn.Parameter]]:
         # Return parameter groups for optimizer
         return {'main': self.parameters(), 'aux': self.entropy_bottleneck.parameters()}
 
@@ -190,7 +190,7 @@ class SCRFull(_base_model._Model_Warpper):
         QV, IQV = self.get_scaling_vectors(quality_level)
         mask = self.get_mask(imp_map, quality_level)
 
-        # Extract sigma and 'y' data for encoding
+        # Extract sigma and 'y' data for encoding with selective compression
         sigma_input = (pred_sigma / QV)[mask].unsqueeze(0)
         y_input = (y / QV)[mask].unsqueeze(0)
 
@@ -244,10 +244,7 @@ class SCRFull(_base_model._Model_Warpper):
         recon_x = self.decoder(combined_y_hat)
 
         # Clip and round the reconstructed images
-        self.decoder.to('cpu')
-        recon_images = torch.round(torch.clip((recon_x.to('cpu') + 1) * 127.5, 0.0, 255.0))
-        recon_images = recon_images.to(QV.device)
-        self.decoder.to(QV.device)
+        recon_images = torch.round(torch.clip((recon_x + 1) * 127.5, 0.0, 255.0))
 
         # Create an output dictionary
         output_dict = {'recon_images': recon_images}
@@ -379,3 +376,154 @@ class SCRFull(_base_model._Model_Warpper):
         self.entropy_bottleneck.update(True)  # Update buffer (_quantized_cdf, _offset, _cdf_length)
         self.conditional_bottleneck.update()  # Update buffer (_quantized_cdf, _offset, _cdf_length, scale_table)
         # self.conditional_bottleneck.update_scale_table(scale_table, True)  # if scale_table changes
+
+
+class SCRWithoutSC(SCRFull):
+    def __init__(self, conf_file, device):
+        super().__init__(conf_file, device)
+        ''' Get configuration '''
+        with open(conf_file) as f:
+            config = yaml.load(f, Loader=yaml.FullLoader)
+            args = config['model']['args']
+        self.hyper_decoder = layers.HyperDecoder(**args)
+        self.hyper_decoder.to(self.device)
+        del self.gamma  # without selective compression
+
+    def train_forward(self, images: Tensor) -> Dict[str, Any]:
+        x = images / 127.5 - 1.  # Normalize input images to the range [-1, 1]
+        y = self.encoder(x)  # Encode input images
+        z = self.hyper_encoder(y)  # Apply hyper-encoder
+        # z_hat, _ = self.entropy_bottleneck(z, training=False)
+
+        # Compress z with the entropy bottleneck (for training)
+        z_tilde, z_likelihood = self.entropy_bottleneck(z, training=True)
+
+        pred_sigma = self.hyper_decoder(z_tilde)  # Decode z with the hyper-decoder
+        # pred_sigma, imp_map = self.hyper_decoder(z_hat)
+
+        # Initialize lists to store reconstructed images and likelihoods
+        recon_x_list = []
+        z_likelihoods_list = []
+        y_likelihoods_list = []
+
+        # Iterate over 8 quantization levels
+        for q_lv in range(8):
+            # Take Quantization vectors and importance adjustment factor for specific quantization level
+            QV = torch.clamp(self.QV[q_lv][None, :, None, None], min=0) + self.qv_eps  # QV/IQV should be positive
+            IQV = torch.clamp(self.IQV[q_lv][None, :, None, None], min=0) + self.qv_eps
+
+            # Compress y with the conditional bottleneck (for training)
+            y_tilde, y_likelihood = self.conditional_bottleneck(y / QV, pred_sigma / QV, training=True)
+            # y_hat, _ = self.conditional_bottleneck(y / QV, pred_sigma / QV, training=False)
+
+            # Apply inverse quantization
+            y_tilde = y_tilde * IQV
+            # y_hat = y_hat * IQV
+
+            # Decode the combined representation
+            x_recon = self.decoder(y_tilde)
+            recon_x_list.append(x_recon)
+            y_likelihoods_list.append(y_likelihood)
+            z_likelihoods_list.append(z_likelihood)
+
+        # Concatenate reconstructed images and likelihoods
+        recon_images = torch.clip((torch.cat(recon_x_list, dim=0) + 1) * 127.5, 0.0, 255.0)
+        y_likelihoods = torch.cat(y_likelihoods_list, dim=0)
+        z_likelihoods = torch.cat(z_likelihoods_list, dim=0)
+
+        # Prepare arguments for loss calculation
+        loss_args = {
+            'images': images, 'recon_images': recon_images,
+            'y_likelihoods': y_likelihoods, 'z_likelihoods': z_likelihoods,
+        }
+
+        # Calculate the total loss and auxiliary loss from the entropy bottleneck
+        loss, loss_dict = self.loss(loss_args)
+        aux_loss = self.entropy_bottleneck.loss()
+        loss_dict['aux_loss'] = aux_loss
+
+        # Create an output dictionary with loss components and reconstructed images
+        output_dict = {'loss': loss, 'aux_loss': aux_loss, 'recon_images': recon_images, 'loss_dict': loss_dict}
+
+        return output_dict
+
+    def encode(self, images: torch.Tensor, quality_level: Union[float, int]) -> Dict[str, Any]:
+        # Normalize input images to the range [-1, 1]
+        x = images / 127.5 - 1.
+
+        # Encode input images
+        y = self.encoder(x)
+        z = self.hyper_encoder(y)
+
+        # Compress 'z' representation
+        z_hat, _ = self.entropy_bottleneck(z, training=False)
+        z_string = self.entropy_bottleneck.compress(z)
+
+        # Handle device migration for testing (To avoid ConvTranspose2D inconsistency in gpu)
+        self.hyper_decoder.to('cpu')
+        pred_sigma = self.hyper_decoder(z_hat.to('cpu'))
+        pred_sigma = pred_sigma.to(x.device)
+        self.hyper_decoder.to(x.device)
+
+        # Prepare scaling vectors and mask
+        QV, IQV = self.get_scaling_vectors(quality_level)
+
+        # Extract sigma and 'y' data for encoding
+        sigma_input = pred_sigma / QV
+        y_input = y / QV
+
+        # Build indexes and compress 'y'
+        indexes = self.conditional_bottleneck.build_indexes(sigma_input)
+        y_string = self.conditional_bottleneck.compress(y_input, indexes)
+
+        # Create an output dictionary
+        output_dict = {
+            'strings': {'y': y_string, 'z': z_string},
+            'quality_level': quality_level,
+            'size': z.size()[-2:],
+        }
+
+        return output_dict
+
+    def decode(self, string_dict: Dict[str, str], size: Tuple[int, int], quality_level: Union[float, int]) -> Dict[str, Any]:
+        # Obtain scaling vectors
+        QV, IQV = self.get_scaling_vectors(quality_level)
+
+        # Extract 'y' and 'z' strings from the dictionary
+        y_string = string_dict['y']
+        z_string = string_dict['z']
+
+        # Decompress 'z' representation
+        z_hat = self.entropy_bottleneck.decompress(z_string, size)
+
+        # Handle device migration for testing
+        self.hyper_decoder.to('cpu')
+        pred_sigma = self.hyper_decoder(z_hat.to('cpu'))
+        pred_sigma = pred_sigma.to(QV.device)
+        self.hyper_decoder.to(QV.device)
+
+        # Scale 'pred_sigma' and extract sigma values based on the mask
+        pred_sigma = pred_sigma / QV
+
+        # Build indexes and decompress 'y' strings
+        indexes = self.conditional_bottleneck.build_indexes(pred_sigma)
+        y_hat = self.conditional_bottleneck.decompress(y_string, indexes)
+        y_hat = y_hat * IQV
+
+        # Decode the combined representation to obtain reconstructed images
+        recon_x = self.decoder(y_hat)
+
+        # Clip and round the reconstructed images
+        recon_images = torch.round(torch.clip((recon_x + 1) * 127.5, 0.0, 255.0))
+        recon_images = recon_images.to(QV.device)
+
+        # Create an output dictionary
+        output_dict = {'recon_images': recon_images}
+
+        return output_dict
+
+    def get_mask(self, **kwargs):
+        raise Exception("This function is deprecated and should not be used in 'without selective compression' mode.")
+
+    def selection_from_mask(self, **kwargs):
+        raise Exception("This function is deprecated and should not be used in 'without selective compression' mode.")

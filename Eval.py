@@ -42,8 +42,8 @@ def eval_image(
 
     # Directory for logging
     parent_dir = f'epoch{epoch}' if epoch is not None else ''
-    quality_str = f'{float(quality_level):.1f}'.replace('.', '_')
-    postfix = f'_q{quality_str}'
+    quality_str = f'{float(quality_level):.1f}'
+    postfix = f'_Qlv{quality_str}'
     viz_dir, log_dir = [os.path.join(result_dir, f'viz{postfix}'), os.path.join(result_dir, 'logs')]
 
     os.makedirs(viz_dir, exist_ok=True) if save_results else None

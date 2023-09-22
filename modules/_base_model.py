@@ -3,7 +3,7 @@ import torch
 from torch import nn
 from compressai.entropy_models import GaussianConditional, EntropyBottleneck
 from compressai.models.utils import update_registered_buffers
-from typing import Any, Mapping, Dict, Tuple
+from typing import Any, Mapping, Dict, Tuple, Iterator
 # import yaml
 
 
@@ -34,7 +34,7 @@ class _Model_Warpper(nn.Module):
         """
         raise NotImplementedError()
 
-    def param(self) -> Dict[str, torch.nn.Parameter]:
+    def param(self) -> Dict[str, Iterator[torch.nn.Parameter]]:
         """
         Placeholder for the parameter grouping logic for optimizer.
 

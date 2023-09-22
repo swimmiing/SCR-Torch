@@ -1,0 +1,17 @@
+model:
+  module_name: Hyperprior
+  args:
+    class: Hyperprior
+    quality_level: 8  # N, M is adjusted in models.py code using quality level
+    filters: [3, 3, 3]
+    scales_min: 0.11
+    scales_max: 256
+    scales_levels: 64
+
+loss:
+  - Distortion
+  - Rate
+
+loss_w:
+  - 1  # Distortion loss weight is adjusted in models.py code using quality level
+  - 1

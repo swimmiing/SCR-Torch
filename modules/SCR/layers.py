@@ -204,9 +204,9 @@ class HyperEncoder(nn.Module):
         return out
 
 
-class HyperDecoder(nn.Module):
+class HyperDecoderSC(nn.Module):
     def __init__(self, N, M, **kwargs):
-        super(HyperDecoder, self).__init__()
+        super(HyperDecoderSC, self).__init__()
 
         self.deconv1 = nn.Sequential(
             Deconv2D(in_channels=N, out_channels=N, kernel_size=5, stride=2),
@@ -238,3 +238,30 @@ class HyperDecoder(nn.Module):
         importance_map = torch.clip(out2 + 0.5, 0, 1)
         return sigma, importance_map
 
+
+class HyperDecoder(nn.Module):
+    def __init__(self, N, M, **kwargs):
+        super(HyperDecoder, self).__init__()
+
+        self.deconv1 = nn.Sequential(
+            Deconv2D(in_channels=N, out_channels=N, kernel_size=5, stride=2),
+            nn.ReLU()
+        )
+
+        self.deconv2 = nn.Sequential(
+            Deconv2D(in_channels=N, out_channels=N, kernel_size=5, stride=2),
+            nn.ReLU()
+        )
+
+        self.deconv3 = nn.Sequential(
+            Deconv2D(in_channels=N, out_channels=M, kernel_size=3, stride=1),
+        )
+
+        self.relu = nn.ReLU()
+
+    def forward(self, x):
+        x = self.deconv1(x)
+        x = self.deconv2(x)
+        x = self.deconv3(x)
+        sigma = self.relu(x)
+        return sigma

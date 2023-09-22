@@ -29,9 +29,9 @@ class SCRFull(_base_model._Model_Warpper):
         self.entropy_bottleneck = EntropyBottleneck(args['N'], filters=args['filters'], tail_mass=2 ** -8)
 
         # Define scales for conditional bottleneck
-        SCALES_MIN = 0.11
-        SCALES_MAX = 256
-        SCALES_LEVELS = 64
+        SCALES_MIN = args['scales_min']
+        SCALES_MAX = args['scales_max']
+        SCALES_LEVELS = args['scales_levels']
         scale_table = np.exp(np.linspace(np.log(SCALES_MIN), np.log(SCALES_MAX), SCALES_LEVELS)).tolist()
 
         # Initialize conditional bottleneck with scale table
